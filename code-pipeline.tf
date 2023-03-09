@@ -1,30 +1,22 @@
+
 locals { #example : fill your information
-  github_token = ""
   github_owner = "gnokoheat"
   github_repo = "ecs-nodejs-app-example"
   github_branch = "master"
 }
 
+
 resource "aws_s3_bucket" "pipeline" {
   bucket = "${var.service_name}-codepipeline-bucket"
+}
 
-  policy = <<POLICY
+  resource "aws_s3_bucket_policy" "pipelineBucketPolicy" {
+    bucket = aws_s3_bucket.pipeline.bucket
+    policy = <<POLICY
 {
   "Version": "2012-10-17",
   "Id": "${var.service_name}Codepipeline",
   "Statement": [
-        {
-            "Sid": "DenyUnEncryptedObjectUploads",
-            "Effect": "Deny",
-            "Principal": "*",
-            "Action": "s3:PutObject",
-            "Resource": "arn:aws:s3:::${var.service_name}-codepipeline-bucket/*",
-            "Condition": {
-                "StringNotEquals": {
-                    "s3:x-amz-server-side-encryption": "aws:kms"
-                }
-            }
-        },
         {
             "Sid": "DenyInsecureConnections",
             "Effect": "Deny",
@@ -40,7 +32,8 @@ resource "aws_s3_bucket" "pipeline" {
     ]
 }
 POLICY
-}
+
+  }
 
 data "aws_iam_policy_document" "assume_by_pipeline" {
   statement {
@@ -113,21 +106,21 @@ data "aws_iam_policy_document" "pipeline" {
     effect = "Allow"
 
     actions = [
-      "elasticbeanstalk:*",
-      "ec2:*",
-      "elasticloadbalancing:*",
       "autoscaling:*",
-      "cloudwatch:*",
-      "s3:*",
-      "sns:*",
       "cloudformation:*",
-      "rds:*",
-      "sqs:*",
-      "ecs:*",
-      "opsworks:*",
+      "cloudwatch:*",
       "devicefarm:*",
+      "ec2:*",
+      "ecs:*",
+      "elasticbeanstalk:*",
+      "elasticloadbalancing:*",
+      "iam:PassRole",
+      "opsworks:*",
+      "rds:*",
+      "s3:*",
       "servicecatalog:*",
-      "iam:PassRole"
+      "sns:*",
+      "sqs:*"
     ]
     resources = ["*"]
   }
@@ -138,6 +131,12 @@ resource "aws_iam_role_policy" "pipeline" {
   policy = "${data.aws_iam_policy_document.pipeline.json}"
 }
 
+resource "aws_codestarconnections_connection" "example" {
+  name          = "example-connection"
+  provider_type = "GitHub"
+}
+
+
 resource "aws_codepipeline" "this" {
   name = "${var.service_name}-pipeline"
   role_arn = "${aws_iam_role.pipeline.arn}"
@@ -147,22 +146,23 @@ resource "aws_codepipeline" "this" {
     type = "S3"
   }
 
+  
   stage {
     name = "Source"
 
     action {
       name = "Source"
       category = "Source"
-      owner = "ThirdParty"
-      provider = "GitHub"
+      owner = "AWS"
+      provider         = "CodeStarSourceConnection"
       version = "1"
       output_artifacts = ["SourceArtifact"]
 
       configuration = {
-        OAuthToken = "${local.github_token}"
-        Owner = "${local.github_owner}"
-        Repo = "${local.github_repo}"
-        Branch = "${local.github_branch}"
+        ConnectionArn    = aws_codestarconnections_connection.example.arn
+        FullRepositoryId = "${local.github_owner}/${local.github_repo}"
+        BranchName       = "${local.github_branch}"
+
       }
     }
   }

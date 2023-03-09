@@ -18,5 +18,5 @@ resource "aws_ecs_service" "this" {
     type = "CODE_DEPLOY"
   }
 
-  depends_on = ["aws_lb_listener.this"]
+  depends_on = [aws_lb_listener.this]
 }
